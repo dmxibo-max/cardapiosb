@@ -30,11 +30,31 @@
         .modal {
             background: rgba(0, 0, 0, 0.5);
         }
+        .message-box {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #2c3e50;
+            color: white;
+            padding: 1rem 2rem;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.5s ease-in-out;
+        }
+        .message-box.show {
+            opacity: 1;
+        }
     </style>
 </head>
 <body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
 
     <div id="app" class="w-full h-full">
+
+        <!-- Mensagem de feedback temporária -->
+        <div id="message-box" class="message-box hidden"></div>
 
         <!-- Tela de Abertura de Caixa -->
         <div id="caixa-abertura" class="card space-y-4">
@@ -67,7 +87,7 @@
                     Olá, <span id="nome-vendedor" class="font-semibold"></span>! <br>
                     <span id="info-venda" class="text-xs"></span>
                 </p>
-                <p id="userIdDisplay" class="text-xs text-center text-gray-400 mt-2">ID do Usuário: Carregando...</p>
+                <!-- Removido o display de userId, pois não estamos usando Firebase -->
             </div>
 
             <div class="flex flex-col-reverse md:flex-row gap-4">
@@ -218,6 +238,12 @@
                         <p class="text-center text-gray-500 italic">Carregando produtos...</p>
                     </ul>
                 </div>
+                
+                <!-- Adicionado botão para exportar produtos para o código -->
+                <button id="exportar-produtos-btn" class="w-full bg-purple-500 text-white py-2 px-4 rounded-md hover:bg-purple-600 transition-colors">
+                    Copiar JSON para o Código
+                </button>
+
 
                 <div class="flex justify-center mt-4">
                     <button id="voltar-gerenciamento-btn" class="w-full bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 transition-colors">
@@ -229,51 +255,10 @@
     </div>
 
     <!-- Scripts -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, addDoc, query, where, onSnapshot, doc, deleteDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        
-        // Log Level
-        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        setLogLevel('debug');
-
-        // Variáveis globais para o Firebase (fornecidas pelo ambiente)
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-
-        // --- Configuração e Inicialização do Firebase ---
-        let db, auth, userId;
-        let isAuthReady = false;
-
-        const app = initializeApp(firebaseConfig);
-        auth = getAuth(app);
-        db = getFirestore(app);
-        
-        // --- NOVO: Listener de Autenticação para garantir o fluxo correto ---
-        onAuthStateChanged(auth, async (user) => {
-            if (user) {
-                console.log("Autenticação concluída. Usuário:", user.uid);
-                userId = user.uid;
-                document.getElementById('userIdDisplay').textContent = `ID do Usuário: ${userId}`;
-                isAuthReady = true;
-                // Inicializa os listeners do Firestore somente após a autenticação
-                iniciarListenersFirestore();
-            } else {
-                console.log("Usuário não autenticado. Tentando login anônimo ou com token...");
-                try {
-                    await signInWithCustomToken(auth, initialAuthToken || '');
-                } catch (error) {
-                    console.error("Erro ao autenticar no Firebase:", error);
-                    // Como fallback, tente o login anônimo se o token falhar
-                    await signInAnonymously(auth);
-                }
-            }
-        });
-
-        // --- Variáveis de Estado do Aplicativo ---
-        let produtos = [];
+    <script>
+        // Variáveis de Estado do Aplicativo
+        let produtos = []; // Produtos serão carregados do localStorage ou da lista padrão
+        let vendasDia = []; // Vendas serão carregadas do localStorage
 
         let pedidoAtual = {
             itens: [],
@@ -284,9 +269,73 @@
             nomeVendedor: '',
             dataVenda: '',
             localVenda: '',
-            vendasDia: [],
-            totalArrecadado: 0,
         };
+        
+        // --- Funções de Utilitário ---
+        function showMessage(text, isError = false) {
+            const msgBox = document.getElementById('message-box');
+            msgBox.textContent = text;
+            msgBox.classList.remove('hidden');
+            msgBox.classList.add('show');
+            if (isError) {
+                msgBox.style.backgroundColor = '#e74c3c';
+            } else {
+                msgBox.style.backgroundColor = '#2c3e50';
+            }
+            setTimeout(() => {
+                msgBox.classList.remove('show');
+                setTimeout(() => msgBox.classList.add('hidden'), 500);
+            }, 3000);
+        }
+
+        function loadData() {
+            // Carrega produtos do localStorage, se existirem
+            const storedProducts = localStorage.getItem('produtos');
+            if (storedProducts) {
+                try {
+                    produtos = JSON.parse(storedProducts);
+                } catch (e) {
+                    console.error("Erro ao carregar produtos do localStorage:", e);
+                    // Se falhar, usa a lista padrão
+                    produtos = [
+                        { id: 'prod1', nome: 'Brigadeiro', preco: 4.50, disponivel: true },
+                        { id: 'prod2', nome: 'Beijinho', preco: 4.00, disponivel: true },
+                        { id: 'prod3', nome: 'Cajuzinho', preco: 4.25, disponivel: false }
+                    ];
+                }
+            } else {
+                // Se não houver dados, usa a lista padrão inicial
+                produtos = [
+                    { id: 'prod1', nome: 'Brigadeiro', preco: 4.50, disponivel: true },
+                    { id: 'prod2', nome: 'Beijinho', preco: 4.00, disponivel: true },
+                    { id: 'prod3', nome: 'Cajuzinho', preco: 4.25, disponivel: false }
+                ];
+            }
+
+            // Carrega vendas do localStorage, se existirem
+            const storedVendas = localStorage.getItem('vendasDia');
+            if (storedVendas) {
+                try {
+                    vendasDia = JSON.parse(storedVendas);
+                } catch (e) {
+                    console.error("Erro ao carregar vendas do localStorage:", e);
+                    vendasDia = [];
+                }
+            } else {
+                vendasDia = [];
+            }
+
+            renderizarProdutos();
+        }
+
+        function saveData() {
+            try {
+                localStorage.setItem('produtos', JSON.stringify(produtos));
+                localStorage.setItem('vendasDia', JSON.stringify(vendasDia));
+            } catch (e) {
+                console.error("Erro ao salvar dados no localStorage:", e);
+            }
+        }
         
         // --- Funções de Renderização e Lógica ---
 
@@ -394,50 +443,46 @@
             renderizarPedido();
         }
 
-        async function registrarVenda(metodoPagamento) {
-            if (!isAuthReady || !userId) {
-                console.error("Usuário não autenticado. Não é possível registrar a venda.");
-                return;
+        function registrarVenda(metodoPagamento) {
+            if (pedidoAtual.itens.length === 0) {
+                 showMessage("O pedido está vazio. Adicione itens antes de fechar a venda.", true);
+                 return;
             }
-            try {
-                // Prepara os dados da venda
-                const venda = {
-                    itemsVendidos: pedidoAtual.itens.map(item => ({
-                        nome: item.nome,
-                        quantidade: item.quantidade,
-                        precoUnitario: item.preco
-                    })),
-                    valorTotal: pedidoAtual.total,
-                    formaPagamento: metodoPagamento,
-                    nomeVendedor: dadosCaixa.nomeVendedor,
-                    localVenda: dadosCaixa.localVenda,
-                    dataVenda: dadosCaixa.dataVenda,
-                    timestamp: new Date(),
-                    // Firestore não suporta arrays com objetos aninhados. Serializamos para JSON.
-                    itemsJSON: JSON.stringify(pedidoAtual.itens.map(item => ({ nome: item.nome, quantidade: item.quantidade, preco: item.preco }))),
-                };
+            
+            const venda = {
+                itemsVendidos: pedidoAtual.itens.map(item => ({
+                    nome: item.nome,
+                    quantidade: item.quantidade,
+                    precoUnitario: item.preco
+                })),
+                valorTotal: pedidoAtual.total,
+                formaPagamento: metodoPagamento,
+                nomeVendedor: dadosCaixa.nomeVendedor,
+                localVenda: dadosCaixa.localVenda,
+                dataVenda: dadosCaixa.dataVenda,
+                timestamp: new Date().toISOString(),
+                // Salvamos o array de itens para o relatório futuro
+                itemsJSON: JSON.stringify(pedidoAtual.itens.map(item => ({ nome: item.nome, quantidade: item.quantidade, preco: item.preco }))),
+            };
 
-                const salesCollection = collection(db, `artifacts/${appId}/public/data/sales`);
-                await addDoc(salesCollection, venda);
+            vendasDia.push(venda);
+            saveData(); // Salva as vendas no localStorage
 
-                // Limpa o pedido atual para a próxima venda
-                pedidoAtual.itens = [];
-                pedidoAtual.total = 0;
-                renderizarPedido();
-                
-                // Volta para o menu
-                exibirTela('tela-menu');
-                
-            } catch (e) {
-                console.error("Erro ao adicionar documento: ", e);
-            }
+            // Limpa o pedido atual para a próxima venda
+            pedidoAtual.itens = [];
+            pedidoAtual.total = 0;
+            renderizarPedido();
+            
+            // Volta para o menu
+            exibirTela('tela-menu');
+            showMessage("Venda registrada com sucesso!");
         }
         
         function gerarRelatorioCaixa() {
             const itensVendidos = {};
             let totalArrecadado = 0;
 
-            dadosCaixa.vendasDia.forEach(venda => {
+            vendasDia.forEach(venda => {
                 const items = JSON.parse(venda.itemsJSON);
                 totalArrecadado += venda.valorTotal;
 
@@ -514,7 +559,7 @@
         
         // Função para exportar o relatório detalhado de cada venda
         function exportarExcel() {
-            const vendas = dadosCaixa.vendasDia;
+            const vendas = vendasDia;
             let csvContent = "data:text/csv;charset=utf-8,";
             
             // Cabeçalho da planilha
@@ -570,7 +615,7 @@
         // Nova função para exportar o relatório geral
         function exportarRelatorioGeralExcel() {
             const itensVendidos = {};
-            dadosCaixa.vendasDia.forEach(venda => {
+            vendasDia.forEach(venda => {
                 const items = JSON.parse(venda.itemsJSON);
                 items.forEach(item => {
                     if (itensVendidos[item.nome]) {
@@ -624,10 +669,6 @@
             document.getElementById(id).classList.remove('hidden');
         }
 
-        function esconderTela(id) {
-             document.getElementById(id).classList.add('hidden');
-        }
-
         // --- Event Listeners e Fluxo de Telas ---
 
         // Abertura de Caixa
@@ -646,7 +687,7 @@
                 
                 exibirTela('tela-menu');
             } else {
-                alert("Por favor, preencha todos os campos.");
+                showMessage("Por favor, preencha todos os campos.", true);
             }
         });
 
@@ -663,6 +704,8 @@
             if (pedidoAtual.itens.length > 0) {
                 renderizarResumoPedido();
                 exibirTela('tela-resumo-pedido');
+            } else {
+                showMessage("O pedido está vazio. Adicione itens antes de fechar a venda.", true);
             }
         });
         
@@ -678,7 +721,11 @@
         // Confirmar pagamento
         document.getElementById('confirmar-pagamento-btn').addEventListener('click', () => {
             const metodoPagamento = document.querySelector('.pagamento-btn.bg-blue-500').dataset.pagamento;
-            registrarVenda(metodoPagamento);
+            if (metodoPagamento) {
+                registrarVenda(metodoPagamento);
+            } else {
+                showMessage("Selecione uma forma de pagamento.", true);
+            }
         });
         
         // Cancelar confirmação
@@ -699,8 +746,16 @@
 
         // Fechar caixa definitivo (do relatório)
         document.getElementById('fechar-caixa-btn').addEventListener('click', () => {
-            console.log("Caixa fechado para o dia!");
-            alert("Caixa fechado com sucesso! Para abrir um novo caixa, por favor, recarregue a página.");
+            // Primeiro, exporta os dados de vendas
+            exportarRelatorioGeralExcel();
+            // Em seguida, apaga as vendas e os dados do caixa
+            vendasDia = [];
+            localStorage.removeItem('vendasDia');
+            localStorage.removeItem('caixaAberto'); // Podemos adicionar um flag no futuro
+            showMessage("Caixa fechado com sucesso! Os dados foram exportados e o caixa foi redefinido.");
+            
+            // Volta para a tela de abertura
+            exibirTela('caixa-abertura');
         });
         
         // Abrir tela de gerenciamento
@@ -715,38 +770,46 @@
         });
 
         // Salvar/Editar Produto
-        document.getElementById('salvar-produto-btn').addEventListener('click', async () => {
+        document.getElementById('salvar-produto-btn').addEventListener('click', () => {
             const id = document.getElementById('produto-id-edicao').value;
             const nome = document.getElementById('produto-nome').value;
             const preco = parseFloat(document.getElementById('produto-preco').value);
             const disponivel = document.getElementById('produto-disponivel').checked;
 
             if (!nome || isNaN(preco)) {
-                alert('Por favor, preencha o nome e o preço do produto.');
+                showMessage('Por favor, preencha o nome e o preço do produto.', true);
                 return;
             }
             
             if (id) {
                 // Editar produto existente
-                const produtoDocRef = doc(db, `artifacts/${appId}/public/data/products`, id);
-                await setDoc(produtoDocRef, { nome, preco, disponivel }, { merge: true });
+                const index = produtos.findIndex(p => p.id === id);
+                if (index !== -1) {
+                    produtos[index] = { ...produtos[index], nome, preco, disponivel };
+                }
             } else {
                 // Adicionar novo produto
-                const productsCollection = collection(db, `artifacts/${appId}/public/data/products`);
-                await addDoc(productsCollection, { nome, preco, disponivel });
+                const novoId = 'prod' + (produtos.length + 1);
+                produtos.push({ id: novoId, nome, preco, disponivel });
             }
+
+            saveData(); // Salva os produtos no localStorage
+            renderizarGerenciamento();
+            renderizarProdutos(); // Atualiza a tela principal
 
             // Limpa o formulário
             document.getElementById('produto-id-edicao').value = '';
             document.getElementById('produto-nome').value = '';
             document.getElementById('produto-preco').value = '';
             document.getElementById('produto-disponivel').checked = false;
+
+            showMessage("Produto salvo com sucesso!");
         });
 
-        // Edição de produto
+        // Edição e Exclusão de produto
         document.getElementById('lista-produtos-gerenciamento').addEventListener('click', (e) => {
+            const id = e.target.dataset.id;
             if (e.target.classList.contains('editar-btn')) {
-                const id = e.target.dataset.id;
                 const produto = produtos.find(p => p.id === id);
                 if (produto) {
                     document.getElementById('produto-id-edicao').value = id;
@@ -755,12 +818,12 @@
                     document.getElementById('produto-disponivel').checked = produto.disponivel;
                 }
             } else if (e.target.classList.contains('excluir-btn')) {
-                const id = e.target.dataset.id;
-                // Use a custom modal for confirmation instead of alert
-                if (confirm('Tem certeza que deseja excluir este produto?')) {
-                    const produtoDocRef = doc(db, `artifacts/${appId}/public/data/products`, id);
-                    deleteDoc(produtoDocRef);
-                }
+                // Exclui o produto sem confirmação via alerta para seguir a nova regra
+                produtos = produtos.filter(p => p.id !== id);
+                saveData(); // Salva as mudanças
+                renderizarGerenciamento();
+                renderizarProdutos(); // Atualiza a tela principal
+                showMessage("Produto excluído com sucesso!");
             }
         });
         
@@ -772,6 +835,19 @@
             document.getElementById('produto-disponivel').checked = false;
         });
 
+        // --- Nova funcionalidade: Exportar Produtos para o Código ---
+        document.getElementById('exportar-produtos-btn').addEventListener('click', () => {
+            const produtosJSON = JSON.stringify(produtos, null, 2);
+            navigator.clipboard.writeText(produtosJSON).then(() => {
+                showMessage("JSON dos produtos copiado para a área de transferência! Cole este código no arquivo 'index.html' para uma atualização permanente.");
+            }).catch(err => {
+                console.error('Erro ao copiar para a área de transferência:', err);
+                showMessage("Erro ao copiar. Por favor, copie manualmente do console.", true);
+                console.log(produtosJSON);
+            });
+        });
+
+
         // Exportar PDF
         document.getElementById('exportar-pdf-btn').addEventListener('click', exportarPDF);
 
@@ -781,43 +857,9 @@
         // Exportar Relatório Geral (Excel)
         document.getElementById('exportar-relatorio-geral-excel-btn').addEventListener('click', exportarRelatorioGeralExcel);
 
+        // --- Inicialização do App ---
+        window.onload = loadData;
 
-        // --- Firestore Listeners ---
-        function iniciarListenersFirestore() {
-            if (!isAuthReady || !userId) {
-                console.error("Firebase não inicializado ou usuário não autenticado.");
-                return;
-            }
-            
-            // Listener para Vendas
-            const salesCollection = collection(db, `artifacts/${appId}/public/data/sales`);
-            const qSales = query(salesCollection, where("localVenda", "==", dadosCaixa.localVenda), where("dataVenda", "==", dadosCaixa.dataVenda));
-
-            onSnapshot(qSales, (querySnapshot) => {
-                dadosCaixa.vendasDia = [];
-                querySnapshot.forEach((doc) => {
-                    const venda = doc.data();
-                    dadosCaixa.vendasDia.push(venda);
-                });
-                if (document.getElementById('tela-relatorio-caixa').classList.contains('hidden') === false) {
-                    gerarRelatorioCaixa();
-                }
-            });
-
-            // Listener para Produtos (novo)
-            const productsCollection = collection(db, `artifacts/${appId}/public/data/products`);
-            onSnapshot(productsCollection, (querySnapshot) => {
-                produtos = [];
-                querySnapshot.forEach((doc) => {
-                    produtos.push({ id: doc.id, ...doc.data() });
-                });
-                renderizarProdutos();
-                // Se a tela de gerenciamento estiver visível, atualize-a
-                if (document.getElementById('tela-gerenciamento').classList.contains('hidden') === false) {
-                    renderizarGerenciamento();
-                }
-            });
-        }
     </script>
 </body>
 </html>
