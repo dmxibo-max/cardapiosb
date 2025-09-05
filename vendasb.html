@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Santa Bala - Cardápio Digital</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f8ff; /* Azul claro */
+        }
+        .container {
+            max-width: 600px;
+            margin: auto;
+            padding: 1rem;
+        }
+        .card {
+            background-color: white;
+            border-radius: 12px;
+            padding: 1rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .text-light-blue {
+            color: #add8e6;
+        }
+        .modal {
+            background: rgba(0, 0, 0, 0.5);
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
+
+    <div id="app" class="w-full h-full">
+
+        <!-- Tela de Abertura de Caixa -->
+        <div id="caixa-abertura" class="card space-y-4">
+            <h1 class="text-2xl font-bold text-center text-blue-900">Bem-vindo(a) à Santa Bala!</h1>
+            <p class="text-center text-gray-600">Para começar, vamos abrir o caixa.</p>
+            <div class="space-y-4">
+                <div>
+                    <label for="nome" class="block text-sm font-medium text-gray-700">Seu Nome:</label>
+                    <input type="text" id="nome" name="nome" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2" placeholder="Ex: Maria">
+                </div>
+                <div>
+                    <label for="data" class="block text-sm font-medium text-gray-700">Data:</label>
+                    <input type="date" id="data" name="data" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2">
+                </div>
+                <div>
+                    <label for="local" class="block text-sm font-medium text-gray-700">Local de Venda:</label>
+                    <input type="text" id="local" name="local" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2" placeholder="Ex: Feira do Produtor">
+                </div>
+            </div>
+            <button id="abrir-caixa-btn" class="w-full bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 transition-colors">
+                Abrir Caixa
+            </button>
+        </div>
+
+        <!-- Tela do Menu Principal e Pedido -->
+        <div id="tela-menu" class="hidden container">
+            <div class="card mb-4">
+                <h1 class="text-2xl font-bold text-center text-blue-900">Cardápio Santa Bala</h1>
+                <p class="text-sm text-center text-gray-500">
+                    Olá, <span id="nome-vendedor" class="font-semibold"></span>! <br>
+                    <span id="info-venda" class="text-xs"></span>
+                </p>
+                <p id="userIdDisplay" class="text-xs text-center text-gray-400 mt-2">ID do Usuário: Carregando...</p>
+            </div>
+
+            <div class="flex flex-col-reverse md:flex-row gap-4">
+                
+                <!-- Lista de Produtos -->
+                <div id="produtos-container" class="grid grid-cols-2 sm:grid-cols-3 gap-4 w-full md:w-2/3">
+                    <!-- Cards de produtos serão injetados aqui via JS -->
+                </div>
+
+                <!-- Resumo do Pedido -->
+                <div class="w-full md:w-1/3 space-y-4">
+                    <div class="card space-y-2">
+                        <h2 class="text-xl font-bold">Pedido</h2>
+                        <ul id="lista-pedido" class="space-y-2 text-sm text-gray-700">
+                            <!-- Itens do pedido serão injetados aqui -->
+                        </ul>
+                        <p id="empty-cart-message" class="text-center text-gray-500 italic">O pedido está vazio.</p>
+                        <div class="border-t pt-2 mt-2">
+                            <p class="text-lg font-bold flex justify-between items-center">
+                                Total: <span id="total-pedido" class="text-blue-600">R$ 0,00</span>
+                            </p>
+                        </div>
+                    </div>
+                    <button id="fechar-venda-btn" class="w-full bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 transition-colors">
+                        Fechar Venda
+                    </button>
+                    <button id="abrir-relatorio-btn" class="w-full bg-red-500 text-white py-2 px-4 rounded-md hover:bg-red-600 transition-colors">
+                        Relatório do Caixa
+                    </button>
+                    <button id="abrir-gerenciamento-btn" class="w-full bg-gray-500 text-white py-2 px-4 rounded-md hover:bg-gray-600 transition-colors">
+                        Gerenciar Produtos
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tela de Resumo de Pedido (nova) -->
+        <div id="tela-resumo-pedido" class="hidden container">
+            <div class="card space-y-4">
+                <h1 class="text-2xl font-bold text-center text-blue-900">Resumo do Pedido</h1>
+                <div class="space-y-2">
+                    <h2 class="text-xl font-bold">Detalhes</h2>
+                    <ul id="lista-resumo-pedido" class="space-y-2 text-sm text-gray-700">
+                        <!-- Itens do pedido serão injetados aqui -->
+                    </ul>
+                </div>
+                <div class="border-t pt-2 mt-2">
+                    <p class="text-lg font-bold flex justify-between items-center">
+                        Total: <span id="total-resumo-pedido" class="text-blue-600">R$ 0,00</span>
+                    </p>
+                </div>
+                <h2 class="text-xl font-bold text-center mt-6">Forma de Pagamento</h2>
+                <div class="grid grid-cols-2 gap-4">
+                    <button data-pagamento="pix" class="pagamento-btn bg-gray-200 text-gray-800 py-2 px-4 rounded-md hover:bg-gray-300 transition-colors">PIX</button>
+                    <button data-pagamento="dinheiro" class="pagamento-btn bg-gray-200 text-gray-800 py-2 px-4 rounded-md hover:bg-gray-300 transition-colors">Dinheiro</button>
+                    <button data-pagamento="credito" class="pagamento-200 text-gray-800 py-2 px-4 rounded-md hover:bg-gray-300 transition-colors">Crédito</button>
+                    <button data-pagamento="debito" class="pagamento-btn bg-gray-200 text-gray-800 py-2 px-4 rounded-md hover:bg-gray-300 transition-colors">Débito</button>
+                </div>
+                <div class="flex justify-between items-center mt-4">
+                    <button id="cancelar-confirmacao-btn" class="text-sm text-gray-500 hover:text-gray-700">Cancelar</button>
+                    <button id="confirmar-pagamento-btn" class="hidden bg-green-500 text-white py-2 px-4 rounded-md hover:bg-green-600 transition-colors">
+                        Confirmar Pagamento
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tela de Relatório do Caixa (nova) -->
+        <div id="tela-relatorio-caixa" class="hidden container">
+            <div class="card space-y-4">
+                <h1 class="text-2xl font-bold text-center text-blue-900">Relatório do Caixa</h1>
+                <p class="text-sm text-center text-gray-600">Resumo das vendas em <span id="relatorio-local"></span> em <span id="relatorio-data"></span>.</p>
+                
+                <div id="relatorio-conteudo">
+                    <h2 class="text-xl font-bold mt-4">Itens Vendidos</h2>
+                    <div id="relatorio-itens" class="space-y-2 text-sm text-gray-700">
+                        <p class="text-center text-gray-500 italic">Nenhum item vendido ainda.</p>
+                    </div>
+                    
+                    <div class="border-t pt-4">
+                        <p class="text-lg font-bold flex justify-between items-center">
+                            Total Arrecadado: <span id="total-arrecadado" class="text-blue-600">R$ 0,00</span>
+                        </p>
+                    </div>
+                </div>
+                
+                <div class="flex justify-between gap-4 mt-4">
+                    <button id="exportar-relatorio-geral-excel-btn" class="w-full bg-green-500 text-white py-2 px-4 rounded-md hover:bg-green-600 transition-colors">
+                        Exportar Relatório Geral (Excel)
+                    </button>
+                    <button id="exportar-excel-btn" class="w-full bg-green-500 text-white py-2 px-4 rounded-md hover:bg-green-600 transition-colors">
+                        Exportar Relatório Detalhado (Excel)
+                    </button>
+                </div>
+                <div class="flex justify-between gap-4 mt-2">
+                    <button id="exportar-pdf-btn" class="w-full bg-red-500 text-white py-2 px-4 rounded-md hover:bg-red-600 transition-colors">
+                        Exportar PDF
+                    </button>
+                </div>
+                <div class="flex justify-between gap-4 mt-2">
+                    <button id="voltar-vendas-btn" class="w-1/2 bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 transition-colors">
+                        Nova Venda
+                    </button>
+                    <button id="fechar-caixa-btn" class="w-1/2 bg-gray-500 text-white py-2 px-4 rounded-md hover:bg-gray-600 transition-colors">
+                        Fechar Caixa em Definitivo
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Tela de Gerenciamento de Produtos -->
+        <div id="tela-gerenciamento" class="hidden container">
+            <div class="card space-y-4">
+                <h1 class="text-2xl font-bold text-center text-blue-900">Gerenciar Produtos</h1>
+                
+                <!-- Formulário para Adicionar/Editar Produto -->
+                <div class="space-y-4">
+                    <h2 class="text-xl font-semibold">Adicionar/Editar Item</h2>
+                    <input type="hidden" id="produto-id-edicao">
+                    <div>
+                        <label for="produto-nome" class="block text-sm font-medium text-gray-700">Nome do Produto:</label>
+                        <input type="text" id="produto-nome" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2" placeholder="Ex: Brigadeiro Tradicional">
+                    </div>
+                    <div>
+                        <label for="produto-preco" class="block text-sm font-medium text-gray-700">Preço (R$):</label>
+                        <input type="number" id="produto-preco" step="0.01" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2" placeholder="Ex: 4.50">
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <input type="checkbox" id="produto-disponivel" class="rounded text-blue-500 focus:ring-blue-500">
+                        <label for="produto-disponivel" class="text-sm text-gray-700">Disponível para Venda</label>
+                    </div>
+                    <div class="flex gap-4">
+                         <button id="salvar-produto-btn" class="w-full bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 transition-colors">
+                            Salvar Produto
+                        </button>
+                        <button id="cancelar-edicao-btn" class="w-full bg-gray-300 text-gray-800 py-2 px-4 rounded-md hover:bg-gray-400 transition-colors">
+                            Cancelar
+                        </button>
+                    </div>
+                </div>
+                
+                <hr class="my-4">
+
+                <!-- Lista de Produtos Existentes -->
+                <div class="space-y-4">
+                    <h2 class="text-xl font-semibold">Itens Existentes</h2>
+                    <ul id="lista-produtos-gerenciamento" class="space-y-2">
+                        <p class="text-center text-gray-500 italic">Carregando produtos...</p>
+                    </ul>
+                </div>
+
+                <div class="flex justify-center mt-4">
+                    <button id="voltar-gerenciamento-btn" class="w-full bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 transition-colors">
+                        Voltar para o Menu
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, query, where, onSnapshot, doc, deleteDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        
+        // Log Level
+        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        setLogLevel('debug');
+
+        // Variáveis globais para o Firebase (fornecidas pelo ambiente)
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        // --- Configuração e Inicialização do Firebase ---
+        let db, auth, userId;
+        let isAuthReady = false;
+
+        const app = initializeApp(firebaseConfig);
+        auth = getAuth(app);
+        db = getFirestore(app);
+        
+        // --- NOVO: Listener de Autenticação para garantir o fluxo correto ---
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                console.log("Autenticação concluída. Usuário:", user.uid);
+                userId = user.uid;
+                document.getElementById('userIdDisplay').textContent = `ID do Usuário: ${userId}`;
+                isAuthReady = true;
+                // Inicializa os listeners do Firestore somente após a autenticação
+                iniciarListenersFirestore();
+            } else {
+                console.log("Usuário não autenticado. Tentando login anônimo ou com token...");
+                try {
+                    await signInWithCustomToken(auth, initialAuthToken || '');
+                } catch (error) {
+                    console.error("Erro ao autenticar no Firebase:", error);
+                    // Como fallback, tente o login anônimo se o token falhar
+                    await signInAnonymously(auth);
+                }
+            }
+        });
+
+        // --- Variáveis de Estado do Aplicativo ---
+        let produtos = [];
+
+        let pedidoAtual = {
+            itens: [],
+            total: 0,
+        };
+
+        let dadosCaixa = {
+            nomeVendedor: '',
+            dataVenda: '',
+            localVenda: '',
+            vendasDia: [],
+            totalArrecadado: 0,
+        };
+        
+        // --- Funções de Renderização e Lógica ---
+
+        function renderizarProdutos() {
+            const container = document.getElementById('produtos-container');
+            container.innerHTML = ''; // Limpa o container
+            // Filtra e renderiza apenas os produtos disponíveis
+            const produtosDisponiveis = produtos.filter(p => p.disponivel);
+            
+            if (produtosDisponiveis.length === 0) {
+                 container.innerHTML = `<p class="text-center text-gray-500 italic col-span-2 sm:col-span-3">Nenhum produto disponível.</p>`;
+            }
+            
+            produtosDisponiveis.forEach(produto => {
+                const html = `
+                    <div data-id="${produto.id}" class="produto-card card p-2 text-center flex flex-col items-center justify-between transition-transform transform hover:scale-105 cursor-pointer">
+                        <span class="text-3xl mb-2">🧁</span>
+                        <h3 class="font-bold text-gray-800">${produto.nome}</h3>
+                        <p class="text-sm text-blue-600 font-semibold mb-2">R$ ${parseFloat(produto.preco).toFixed(2)}</p>
+                    </div>
+                `;
+                container.innerHTML += html;
+            });
+        }
+        
+        function renderizarGerenciamento() {
+            const listaGerenciamento = document.getElementById('lista-produtos-gerenciamento');
+            listaGerenciamento.innerHTML = '';
+            
+            if (produtos.length === 0) {
+                 listaGerenciamento.innerHTML = `<p class="text-center text-gray-500 italic">Nenhum produto cadastrado.</p>`;
+            }
+            
+            produtos.forEach(produto => {
+                const li = document.createElement('li');
+                li.className = "flex justify-between items-center bg-gray-50 p-3 rounded-lg shadow-sm";
+                li.innerHTML = `
+                    <div class="flex-1">
+                        <p class="font-semibold text-gray-800">${produto.nome}</p>
+                        <p class="text-sm text-gray-600">R$ ${parseFloat(produto.preco).toFixed(2)}</p>
+                        <span class="text-xs ${produto.disponivel ? 'text-green-600' : 'text-red-600'}">
+                            ${produto.disponivel ? 'Disponível' : 'Indisponível'}
+                        </span>
+                    </div>
+                    <div class="flex space-x-2">
+                        <button data-id="${produto.id}" class="editar-btn text-blue-500 hover:text-blue-700">✏️</button>
+                        <button data-id="${produto.id}" class="excluir-btn text-red-500 hover:text-red-700">🗑️</button>
+                    </div>
+                `;
+                listaGerenciamento.appendChild(li);
+            });
+        }
+
+        function renderizarPedido() {
+            const listaPedido = document.getElementById('lista-pedido');
+            const emptyMessage = document.getElementById('empty-cart-message');
+
+            listaPedido.innerHTML = '';
+
+            if (pedidoAtual.itens.length === 0) {
+                emptyMessage.classList.remove('hidden');
+            } else {
+                emptyMessage.classList.add('hidden');
+                pedidoAtual.itens.forEach(item => {
+                    const li = document.createElement('li');
+                    li.className = "flex justify-between items-center";
+                    li.innerHTML = `
+                        <span>${item.nome} (x${item.quantidade})</span>
+                        <span>R$ ${(parseFloat(item.preco) * item.quantidade).toFixed(2)}</span>
+                    `;
+                    listaPedido.appendChild(li);
+                });
+            }
+            document.getElementById('total-pedido').textContent = `R$ ${pedidoAtual.total.toFixed(2)}`;
+        }
+        
+        function renderizarResumoPedido() {
+            const listaResumo = document.getElementById('lista-resumo-pedido');
+            listaResumo.innerHTML = '';
+            
+            pedidoAtual.itens.forEach(item => {
+                const li = document.createElement('li');
+                li.className = "flex justify-between items-center";
+                li.innerHTML = `
+                    <span>${item.nome} (x${item.quantidade})</span>
+                    <span>R$ ${(parseFloat(item.preco) * item.quantidade).toFixed(2)}</span>
+                `;
+                listaResumo.appendChild(li);
+            });
+            document.getElementById('total-resumo-pedido').textContent = `R$ ${pedidoAtual.total.toFixed(2)}`;
+        }
+
+        function adicionarItem(id) {
+            const produto = produtos.find(p => p.id === id);
+            if (!produto) return;
+
+            const itemExistente = pedidoAtual.itens.find(item => item.id === id);
+            if (itemExistente) {
+                itemExistente.quantidade++;
+            } else {
+                pedidoAtual.itens.push({ ...produto, quantidade: 1 });
+            }
+
+            pedidoAtual.total += parseFloat(produto.preco);
+            renderizarPedido();
+        }
+
+        async function registrarVenda(metodoPagamento) {
+            if (!isAuthReady || !userId) {
+                console.error("Usuário não autenticado. Não é possível registrar a venda.");
+                return;
+            }
+            try {
+                // Prepara os dados da venda
+                const venda = {
+                    itemsVendidos: pedidoAtual.itens.map(item => ({
+                        nome: item.nome,
+                        quantidade: item.quantidade,
+                        precoUnitario: item.preco
+                    })),
+                    valorTotal: pedidoAtual.total,
+                    formaPagamento: metodoPagamento,
+                    nomeVendedor: dadosCaixa.nomeVendedor,
+                    localVenda: dadosCaixa.localVenda,
+                    dataVenda: dadosCaixa.dataVenda,
+                    timestamp: new Date(),
+                    // Firestore não suporta arrays com objetos aninhados. Serializamos para JSON.
+                    itemsJSON: JSON.stringify(pedidoAtual.itens.map(item => ({ nome: item.nome, quantidade: item.quantidade, preco: item.preco }))),
+                };
+
+                const salesCollection = collection(db, `artifacts/${appId}/public/data/sales`);
+                await addDoc(salesCollection, venda);
+
+                // Limpa o pedido atual para a próxima venda
+                pedidoAtual.itens = [];
+                pedidoAtual.total = 0;
+                renderizarPedido();
+                
+                // Volta para o menu
+                exibirTela('tela-menu');
+                
+            } catch (e) {
+                console.error("Erro ao adicionar documento: ", e);
+            }
+        }
+        
+        function gerarRelatorioCaixa() {
+            const itensVendidos = {};
+            let totalArrecadado = 0;
+
+            dadosCaixa.vendasDia.forEach(venda => {
+                const items = JSON.parse(venda.itemsJSON);
+                totalArrecadado += venda.valorTotal;
+
+                items.forEach(item => {
+                    if (itensVendidos[item.nome]) {
+                        itensVendidos[item.nome].quantidade += item.quantidade;
+                        itensVendidos[item.nome].valorTotal += item.quantidade * parseFloat(item.preco);
+                    } else {
+                        itensVendidos[item.nome] = {
+                            quantidade: item.quantidade,
+                            valorTotal: item.quantidade * parseFloat(item.preco),
+                        };
+                    }
+                });
+            });
+
+            // Converte para array para ordenar
+            const relatorioArray = Object.keys(itensVendidos).map(key => ({
+                nome: key,
+                ...itensVendidos[key]
+            }));
+
+            // Ordena por quantidade vendida (do maior para o menor)
+            relatorioArray.sort((a, b) => b.quantidade - a.quantidade);
+
+            const relatorioContainer = document.getElementById('relatorio-itens');
+            relatorioContainer.innerHTML = '';
+
+            if (relatorioArray.length > 0) {
+                relatorioArray.forEach(item => {
+                    const html = `
+                        <div class="flex justify-between items-center p-2 rounded-md bg-gray-50">
+                            <span class="font-semibold">${item.nome}</span>
+                            <span class="text-sm text-gray-600">${item.quantidade} unidade(s) - R$ ${item.valorTotal.toFixed(2)}</span>
+                        </div>
+                    `;
+                    relatorioContainer.innerHTML += html;
+                });
+            } else {
+                relatorioContainer.innerHTML = '<p class="text-center text-gray-500 italic">Nenhum item vendido ainda.</p>';
+            }
+
+            document.getElementById('total-arrecadado').textContent = `R$ ${totalArrecadado.toFixed(2)}`;
+            document.getElementById('relatorio-local').textContent = dadosCaixa.localVenda;
+            document.getElementById('relatorio-data').textContent = dadosCaixa.dataVenda;
+        }
+
+        function exportarPDF() {
+            const element = document.getElementById('relatorio-conteudo');
+            const { jsPDF } = window.jspdf;
+
+            html2canvas(element, { scale: 2 }).then(canvas => {
+                const imgData = canvas.toDataURL('image/png');
+                const pdf = new jsPDF('p', 'mm', 'a4');
+                const imgWidth = 210;
+                const pageHeight = 297;
+                const imgHeight = canvas.height * imgWidth / canvas.width;
+                let heightLeft = imgHeight;
+
+                let position = 0;
+
+                pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+                heightLeft -= pageHeight;
+
+                while (heightLeft >= 0) {
+                    position = heightLeft - imgHeight;
+                    pdf.addPage();
+                    pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+                    heightLeft -= pageHeight;
+                }
+                pdf.save(`Relatorio_Caixa_${dadosCaixa.localVenda}_${dadosCaixa.dataVenda}.pdf`);
+            });
+        }
+        
+        // Função para exportar o relatório detalhado de cada venda
+        function exportarExcel() {
+            const vendas = dadosCaixa.vendasDia;
+            let csvContent = "data:text/csv;charset=utf-8,";
+            
+            // Cabeçalho da planilha
+            csvContent += "Venda;Data;Local;Vendedor;Valor Total;Forma de Pagamento";
+
+            // Encontra todos os nomes de itens únicos para criar as colunas dinâmicas
+            const todosItens = new Set();
+            vendas.forEach(venda => {
+                const items = JSON.parse(venda.itemsJSON);
+                items.forEach(item => todosItens.add(item.nome));
+            });
+
+            const itensUnicos = Array.from(todosItens).sort();
+            csvContent += ";" + itensUnicos.map(item => `"${item} (Quantidade)"`).join(";") + "\n";
+
+            // Adiciona as linhas de dados para cada venda
+            vendas.forEach((venda, index) => {
+                const items = JSON.parse(venda.itemsJSON);
+                
+                // Mapeia os dados da venda para a linha CSV
+                const row = [
+                    `"Venda ${index + 1}"`,
+                    `"${venda.dataVenda}"`,
+                    `"${venda.localVenda}"`,
+                    `"${venda.nomeVendedor}"`,
+                    `"R$ ${venda.valorTotal.toFixed(2).replace('.', ',')}"`,
+                    `"${venda.formaPagamento}"`,
+                ];
+
+                // Adiciona as quantidades de cada item
+                const itemQuantities = {};
+                items.forEach(item => {
+                    itemQuantities[item.nome] = item.quantidade;
+                });
+
+                const itemRow = itensUnicos.map(itemNome => {
+                    return itemQuantities[itemNome] ? `"${itemQuantities[itemNome]}"` : '""';
+                });
+
+                csvContent += row.join(";") + ";" + itemRow.join(";") + "\n";
+            });
+
+            // Cria um link temporário para download
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `Relatorio_Detalhado_${dadosCaixa.localVenda}_${dadosCaixa.dataVenda}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // Nova função para exportar o relatório geral
+        function exportarRelatorioGeralExcel() {
+            const itensVendidos = {};
+            dadosCaixa.vendasDia.forEach(venda => {
+                const items = JSON.parse(venda.itemsJSON);
+                items.forEach(item => {
+                    if (itensVendidos[item.nome]) {
+                        itensVendidos[item.nome].quantidade += item.quantidade;
+                        itensVendidos[item.nome].valorTotal += item.quantidade * parseFloat(item.preco);
+                    } else {
+                        itensVendidos[item.nome] = {
+                            quantidade: item.quantidade,
+                            valorTotal: item.quantidade * parseFloat(item.preco),
+                        };
+                    }
+                });
+            });
+
+            // Converte para array para ordenar
+            const relatorioArray = Object.keys(itensVendidos).map(key => ({
+                nome: key,
+                ...itensVendidos[key]
+            }));
+
+            // Ordena por quantidade vendida (do maior para o menor)
+            relatorioArray.sort((a, b) => b.quantidade - a.quantidade);
+            
+            let csvContent = "data:text/csv;charset=utf-8,";
+            
+            // Cabeçalho da planilha
+            csvContent += "Item;Quantidade Total;Valor Total\n";
+
+            // Adiciona as linhas de dados
+            relatorioArray.forEach(item => {
+                const row = [
+                    `"${item.nome}"`,
+                    `"${item.quantidade}"`,
+                    `"R$ ${item.valorTotal.toFixed(2).replace('.', ',')}"`
+                ];
+                csvContent += row.join(";") + "\n";
+            });
+
+            // Cria um link temporário para download
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `Relatorio_Geral_${dadosCaixa.localVenda}_${dadosCaixa.dataVenda}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function exibirTela(id) {
+            document.querySelectorAll('#app > div').forEach(el => el.classList.add('hidden'));
+            document.getElementById(id).classList.remove('hidden');
+        }
+
+        function esconderTela(id) {
+             document.getElementById(id).classList.add('hidden');
+        }
+
+        // --- Event Listeners e Fluxo de Telas ---
+
+        // Abertura de Caixa
+        document.getElementById('abrir-caixa-btn').addEventListener('click', () => {
+            const nome = document.getElementById('nome').value;
+            const data = document.getElementById('data').value;
+            const local = document.getElementById('local').value;
+
+            if (nome && data && local) {
+                dadosCaixa.nomeVendedor = nome;
+                dadosCaixa.dataVenda = data;
+                dadosCaixa.localVenda = local;
+
+                document.getElementById('nome-vendedor').textContent = nome;
+                document.getElementById('info-venda').textContent = `${local} - ${data}`;
+                
+                exibirTela('tela-menu');
+            } else {
+                alert("Por favor, preencha todos os campos.");
+            }
+        });
+
+        // Adicionar item ao pedido
+        document.getElementById('produtos-container').addEventListener('click', (e) => {
+            const clickedCard = e.target.closest('.produto-card');
+            if (clickedCard) {
+                adicionarItem(clickedCard.dataset.id);
+            }
+        });
+
+        // Fechar Venda -> vai para o resumo
+        document.getElementById('fechar-venda-btn').addEventListener('click', () => {
+            if (pedidoAtual.itens.length > 0) {
+                renderizarResumoPedido();
+                exibirTela('tela-resumo-pedido');
+            }
+        });
+        
+        // Selecionar forma de pagamento
+        document.querySelectorAll('.pagamento-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.pagamento-btn').forEach(b => b.classList.remove('bg-blue-500', 'text-white'));
+                btn.classList.add('bg-blue-500', 'text-white');
+                document.getElementById('confirmar-pagamento-btn').classList.remove('hidden');
+            });
+        });
+
+        // Confirmar pagamento
+        document.getElementById('confirmar-pagamento-btn').addEventListener('click', () => {
+            const metodoPagamento = document.querySelector('.pagamento-btn.bg-blue-500').dataset.pagamento;
+            registrarVenda(metodoPagamento);
+        });
+        
+        // Cancelar confirmação
+        document.getElementById('cancelar-confirmacao-btn').addEventListener('click', () => {
+            exibirTela('tela-menu');
+        });
+
+        // Abrir relatório do caixa
+        document.getElementById('abrir-relatorio-btn').addEventListener('click', () => {
+            gerarRelatorioCaixa();
+            exibirTela('tela-relatorio-caixa');
+        });
+
+        // Voltar para nova venda (do relatório)
+        document.getElementById('voltar-vendas-btn').addEventListener('click', () => {
+            exibirTela('tela-menu');
+        });
+
+        // Fechar caixa definitivo (do relatório)
+        document.getElementById('fechar-caixa-btn').addEventListener('click', () => {
+            console.log("Caixa fechado para o dia!");
+            alert("Caixa fechado com sucesso! Para abrir um novo caixa, por favor, recarregue a página.");
+        });
+        
+        // Abrir tela de gerenciamento
+        document.getElementById('abrir-gerenciamento-btn').addEventListener('click', () => {
+            exibirTela('tela-gerenciamento');
+            renderizarGerenciamento();
+        });
+
+        // Voltar do gerenciamento para o menu
+        document.getElementById('voltar-gerenciamento-btn').addEventListener('click', () => {
+            exibirTela('tela-menu');
+        });
+
+        // Salvar/Editar Produto
+        document.getElementById('salvar-produto-btn').addEventListener('click', async () => {
+            const id = document.getElementById('produto-id-edicao').value;
+            const nome = document.getElementById('produto-nome').value;
+            const preco = parseFloat(document.getElementById('produto-preco').value);
+            const disponivel = document.getElementById('produto-disponivel').checked;
+
+            if (!nome || isNaN(preco)) {
+                alert('Por favor, preencha o nome e o preço do produto.');
+                return;
+            }
+            
+            if (id) {
+                // Editar produto existente
+                const produtoDocRef = doc(db, `artifacts/${appId}/public/data/products`, id);
+                await setDoc(produtoDocRef, { nome, preco, disponivel }, { merge: true });
+            } else {
+                // Adicionar novo produto
+                const productsCollection = collection(db, `artifacts/${appId}/public/data/products`);
+                await addDoc(productsCollection, { nome, preco, disponivel });
+            }
+
+            // Limpa o formulário
+            document.getElementById('produto-id-edicao').value = '';
+            document.getElementById('produto-nome').value = '';
+            document.getElementById('produto-preco').value = '';
+            document.getElementById('produto-disponivel').checked = false;
+        });
+
+        // Edição de produto
+        document.getElementById('lista-produtos-gerenciamento').addEventListener('click', (e) => {
+            if (e.target.classList.contains('editar-btn')) {
+                const id = e.target.dataset.id;
+                const produto = produtos.find(p => p.id === id);
+                if (produto) {
+                    document.getElementById('produto-id-edicao').value = id;
+                    document.getElementById('produto-nome').value = produto.nome;
+                    document.getElementById('produto-preco').value = produto.preco;
+                    document.getElementById('produto-disponivel').checked = produto.disponivel;
+                }
+            } else if (e.target.classList.contains('excluir-btn')) {
+                const id = e.target.dataset.id;
+                // Use a custom modal for confirmation instead of alert
+                if (confirm('Tem certeza que deseja excluir este produto?')) {
+                    const produtoDocRef = doc(db, `artifacts/${appId}/public/data/products`, id);
+                    deleteDoc(produtoDocRef);
+                }
+            }
+        });
+        
+        // Limpar campos de edição ao cancelar
+        document.getElementById('cancelar-edicao-btn').addEventListener('click', () => {
+            document.getElementById('produto-id-edicao').value = '';
+            document.getElementById('produto-nome').value = '';
+            document.getElementById('produto-preco').value = '';
+            document.getElementById('produto-disponivel').checked = false;
+        });
+
+        // Exportar PDF
+        document.getElementById('exportar-pdf-btn').addEventListener('click', exportarPDF);
+
+        // Exportar Relatório Detalhado (Excel)
+        document.getElementById('exportar-excel-btn').addEventListener('click', exportarExcel);
+
+        // Exportar Relatório Geral (Excel)
+        document.getElementById('exportar-relatorio-geral-excel-btn').addEventListener('click', exportarRelatorioGeralExcel);
+
+
+        // --- Firestore Listeners ---
+        function iniciarListenersFirestore() {
+            if (!isAuthReady || !userId) {
+                console.error("Firebase não inicializado ou usuário não autenticado.");
+                return;
+            }
+            
+            // Listener para Vendas
+            const salesCollection = collection(db, `artifacts/${appId}/public/data/sales`);
+            const qSales = query(salesCollection, where("localVenda", "==", dadosCaixa.localVenda), where("dataVenda", "==", dadosCaixa.dataVenda));
+
+            onSnapshot(qSales, (querySnapshot) => {
+                dadosCaixa.vendasDia = [];
+                querySnapshot.forEach((doc) => {
+                    const venda = doc.data();
+                    dadosCaixa.vendasDia.push(venda);
+                });
+                if (document.getElementById('tela-relatorio-caixa').classList.contains('hidden') === false) {
+                    gerarRelatorioCaixa();
+                }
+            });
+
+            // Listener para Produtos (novo)
+            const productsCollection = collection(db, `artifacts/${appId}/public/data/products`);
+            onSnapshot(productsCollection, (querySnapshot) => {
+                produtos = [];
+                querySnapshot.forEach((doc) => {
+                    produtos.push({ id: doc.id, ...doc.data() });
+                });
+                renderizarProdutos();
+                // Se a tela de gerenciamento estiver visível, atualize-a
+                if (document.getElementById('tela-gerenciamento').classList.contains('hidden') === false) {
+                    renderizarGerenciamento();
+                }
+            });
+        }
+    </script>
+</body>
+</html>
