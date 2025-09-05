@@ -47,6 +47,11 @@
         .message-box.show {
             opacity: 1;
         }
+        .out-of-stock {
+            opacity: 0.5;
+            cursor: not-allowed;
+            filter: grayscale(100%);
+        }
     </style>
 </head>
 <body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
@@ -143,7 +148,7 @@
                 <div class="grid grid-cols-2 gap-4">
                     <button data-pagamento="pix" class="pagamento-btn bg-gray-200 text-gray-800 py-2 px-4 rounded-md hover:bg-gray-300 transition-colors">PIX</button>
                     <button data-pagamento="dinheiro" class="pagamento-btn bg-gray-200 text-gray-800 py-2 px-4 rounded-md hover:bg-gray-300 transition-colors">Dinheiro</button>
-                    <button data-pagamento="credito" class="pagamento-200 text-gray-800 py-2 px-4 rounded-md hover:bg-gray-300 transition-colors">Crédito</button>
+                    <button data-pagamento="credito" class="pagamento-btn bg-gray-200 text-gray-800 py-2 px-4 rounded-md hover:bg-gray-300 transition-colors">Crédito</button>
                     <button data-pagamento="debito" class="pagamento-btn bg-gray-200 text-gray-800 py-2 px-4 rounded-md hover:bg-gray-300 transition-colors">Débito</button>
                 </div>
                 <div class="flex justify-between items-center mt-4">
@@ -214,6 +219,10 @@
                     <div>
                         <label for="produto-preco" class="block text-sm font-medium text-gray-700">Preço (R$):</label>
                         <input type="number" id="produto-preco" step="0.01" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2" placeholder="Ex: 4.50">
+                    </div>
+                    <div>
+                        <label for="produto-quantidade" class="block text-sm font-medium text-gray-700">Estoque:</label>
+                        <input type="number" id="produto-quantidade" step="1" min="0" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2" placeholder="Ex: 10">
                     </div>
                     <div class="flex items-center space-x-2">
                         <input type="checkbox" id="produto-disponivel" class="rounded text-blue-500 focus:ring-blue-500">
@@ -298,17 +307,17 @@
                     console.error("Erro ao carregar produtos do localStorage:", e);
                     // Se falhar, usa a lista padrão
                     produtos = [
-                        { id: 'prod1', nome: 'Brigadeiro', preco: 4.50, disponivel: true },
-                        { id: 'prod2', nome: 'Beijinho', preco: 4.00, disponivel: true },
-                        { id: 'prod3', nome: 'Cajuzinho', preco: 4.25, disponivel: false }
+                        { id: 'prod1', nome: 'Brigadeiro', preco: 4.50, disponivel: true, quantidade: 10 },
+                        { id: 'prod2', nome: 'Beijinho', preco: 4.00, disponivel: true, quantidade: 10 },
+                        { id: 'prod3', nome: 'Cajuzinho', preco: 4.25, disponivel: false, quantidade: 0 }
                     ];
                 }
             } else {
                 // Se não houver dados, usa a lista padrão inicial
                 produtos = [
-                    { id: 'prod1', nome: 'Brigadeiro', preco: 4.50, disponivel: true },
-                    { id: 'prod2', nome: 'Beijinho', preco: 4.00, disponivel: true },
-                    { id: 'prod3', nome: 'Cajuzinho', preco: 4.25, disponivel: false }
+                    { id: 'prod1', nome: 'Brigadeiro', preco: 4.50, disponivel: true, quantidade: 10 },
+                    { id: 'prod2', nome: 'Beijinho', preco: 4.00, disponivel: true, quantidade: 10 },
+                    { id: 'prod3', nome: 'Cajuzinho', preco: 4.25, disponivel: false, quantidade: 0 }
                 ];
             }
 
@@ -350,11 +359,15 @@
             }
             
             produtosDisponiveis.forEach(produto => {
+                const isOutOfStock = produto.quantidade <= 0;
+                const cardClasses = isOutOfStock ? 'out-of-stock cursor-not-allowed' : 'cursor-pointer';
+
                 const html = `
-                    <div data-id="${produto.id}" class="produto-card card p-2 text-center flex flex-col items-center justify-between transition-transform transform hover:scale-105 cursor-pointer">
+                    <div data-id="${produto.id}" class="produto-card card p-2 text-center flex flex-col items-center justify-between transition-transform transform hover:scale-105 ${cardClasses}">
                         <span class="text-3xl mb-2">🧁</span>
                         <h3 class="font-bold text-gray-800">${produto.nome}</h3>
-                        <p class="text-sm text-blue-600 font-semibold mb-2">R$ ${parseFloat(produto.preco).toFixed(2)}</p>
+                        <p class="text-sm text-blue-600 font-semibold mb-1">R$ ${parseFloat(produto.preco).toFixed(2)}</p>
+                        <p class="text-xs text-gray-500">${isOutOfStock ? 'Esgotado' : `Em estoque: ${produto.quantidade}`}</p>
                     </div>
                 `;
                 container.innerHTML += html;
@@ -376,6 +389,7 @@
                     <div class="flex-1">
                         <p class="font-semibold text-gray-800">${produto.nome}</p>
                         <p class="text-sm text-gray-600">R$ ${parseFloat(produto.preco).toFixed(2)}</p>
+                        <p class="text-xs text-gray-600">Estoque: ${produto.quantidade}</p>
                         <span class="text-xs ${produto.disponivel ? 'text-green-600' : 'text-red-600'}">
                             ${produto.disponivel ? 'Disponível' : 'Indisponível'}
                         </span>
@@ -404,7 +418,12 @@
                     li.className = "flex justify-between items-center";
                     li.innerHTML = `
                         <span>${item.nome} (x${item.quantidade})</span>
-                        <span>R$ ${(parseFloat(item.preco) * item.quantidade).toFixed(2)}</span>
+                        <div class="flex items-center space-x-2">
+                             <button data-id="${item.id}" class="remover-item-btn text-red-500 hover:text-red-700 p-1 rounded-full text-xs">
+                               -
+                            </button>
+                            <span>R$ ${(parseFloat(item.preco) * item.quantidade).toFixed(2)}</span>
+                        </div>
                     `;
                     listaPedido.appendChild(li);
                 });
@@ -432,6 +451,12 @@
             const produto = produtos.find(p => p.id === id);
             if (!produto) return;
 
+            // Verifica se há estoque
+            if (produto.quantidade <= 0) {
+                showMessage(`Desculpe, o produto "${produto.nome}" está esgotado.`, true);
+                return;
+            }
+
             const itemExistente = pedidoAtual.itens.find(item => item.id === id);
             if (itemExistente) {
                 itemExistente.quantidade++;
@@ -440,7 +465,32 @@
             }
 
             pedidoAtual.total += parseFloat(produto.preco);
+            produto.quantidade--; // Decrementa o estoque
+            saveData();
             renderizarPedido();
+            renderizarProdutos(); // Atualiza a exibição de estoque na tela de produtos
+        }
+        
+        function removerItem(id) {
+            const itemExistente = pedidoAtual.itens.find(item => item.id === id);
+            if (!itemExistente) return;
+            
+            // Reverte o estoque
+            const produtoOriginal = produtos.find(p => p.id === id);
+            if (produtoOriginal) {
+                produtoOriginal.quantidade++;
+            }
+            
+            itemExistente.quantidade--;
+            pedidoAtual.total -= parseFloat(itemExistente.preco);
+            
+            if (itemExistente.quantidade === 0) {
+                pedidoAtual.itens = pedidoAtual.itens.filter(item => item.id !== id);
+            }
+            
+            saveData();
+            renderizarPedido();
+            renderizarProdutos(); // Atualiza a exibição de estoque
         }
 
         function registrarVenda(metodoPagamento) {
@@ -695,7 +745,21 @@
         document.getElementById('produtos-container').addEventListener('click', (e) => {
             const clickedCard = e.target.closest('.produto-card');
             if (clickedCard) {
-                adicionarItem(clickedCard.dataset.id);
+                const isOutOfStock = clickedCard.classList.contains('out-of-stock');
+                if (!isOutOfStock) {
+                    adicionarItem(clickedCard.dataset.id);
+                } else {
+                    const produto = produtos.find(p => p.id === clickedCard.dataset.id);
+                    showMessage(`Desculpe, o produto "${produto.nome}" está esgotado.`, true);
+                }
+            }
+        });
+        
+        // Remover item do pedido
+        document.getElementById('lista-pedido').addEventListener('click', (e) => {
+            if (e.target.classList.contains('remover-item-btn')) {
+                const id = e.target.dataset.id;
+                removerItem(id);
             }
         });
 
@@ -722,6 +786,17 @@
         document.getElementById('confirmar-pagamento-btn').addEventListener('click', () => {
             const metodoPagamento = document.querySelector('.pagamento-btn.bg-blue-500').dataset.pagamento;
             if (metodoPagamento) {
+                // Diminui o estoque dos itens vendidos
+                pedidoAtual.itens.forEach(itemPedido => {
+                     const produtoOriginal = produtos.find(p => p.id === itemPedido.id);
+                     if (produtoOriginal) {
+                         produtoOriginal.quantidade = produtoOriginal.quantidade - itemPedido.quantidade;
+                     }
+                });
+                
+                // Salva o estado atualizado do estoque
+                saveData();
+                
                 registrarVenda(metodoPagamento);
             } else {
                 showMessage("Selecione uma forma de pagamento.", true);
@@ -774,10 +849,11 @@
             const id = document.getElementById('produto-id-edicao').value;
             const nome = document.getElementById('produto-nome').value;
             const preco = parseFloat(document.getElementById('produto-preco').value);
+            const quantidade = parseInt(document.getElementById('produto-quantidade').value);
             const disponivel = document.getElementById('produto-disponivel').checked;
 
-            if (!nome || isNaN(preco)) {
-                showMessage('Por favor, preencha o nome e o preço do produto.', true);
+            if (!nome || isNaN(preco) || isNaN(quantidade)) {
+                showMessage('Por favor, preencha o nome, preço e estoque do produto.', true);
                 return;
             }
             
@@ -785,12 +861,12 @@
                 // Editar produto existente
                 const index = produtos.findIndex(p => p.id === id);
                 if (index !== -1) {
-                    produtos[index] = { ...produtos[index], nome, preco, disponivel };
+                    produtos[index] = { ...produtos[index], nome, preco, quantidade, disponivel };
                 }
             } else {
                 // Adicionar novo produto
                 const novoId = 'prod' + (produtos.length + 1);
-                produtos.push({ id: novoId, nome, preco, disponivel });
+                produtos.push({ id: novoId, nome, preco, quantidade, disponivel });
             }
 
             saveData(); // Salva os produtos no localStorage
@@ -801,6 +877,7 @@
             document.getElementById('produto-id-edicao').value = '';
             document.getElementById('produto-nome').value = '';
             document.getElementById('produto-preco').value = '';
+            document.getElementById('produto-quantidade').value = '';
             document.getElementById('produto-disponivel').checked = false;
 
             showMessage("Produto salvo com sucesso!");
@@ -815,6 +892,7 @@
                     document.getElementById('produto-id-edicao').value = id;
                     document.getElementById('produto-nome').value = produto.nome;
                     document.getElementById('produto-preco').value = produto.preco;
+                    document.getElementById('produto-quantidade').value = produto.quantidade;
                     document.getElementById('produto-disponivel').checked = produto.disponivel;
                 }
             } else if (e.target.classList.contains('excluir-btn')) {
@@ -832,6 +910,7 @@
             document.getElementById('produto-id-edicao').value = '';
             document.getElementById('produto-nome').value = '';
             document.getElementById('produto-preco').value = '';
+            document.getElementById('produto-quantidade').value = '';
             document.getElementById('produto-disponivel').checked = false;
         });
 
