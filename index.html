@@ -6,7 +6,7 @@
     <title>Santa Bala - Cardápio Digital</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
         body {
@@ -52,6 +52,20 @@
             cursor: not-allowed;
             filter: grayscale(100%);
         }
+        .number-emoji {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 4rem;
+            height: 4rem;
+            background-color: #add8e6;
+            color: #1a237e;
+            font-weight: bold;
+            border-radius: 50%;
+            font-size: 1.5rem;
+            line-height: 1;
+            margin-bottom: 0.5rem;
+        }
     </style>
 </head>
 <body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
@@ -92,7 +106,6 @@
                     Olá, <span id="nome-vendedor" class="font-semibold"></span>! <br>
                     <span id="info-venda" class="text-xs"></span>
                 </p>
-                <!-- Removido o display de userId, pois não estamos usando Firebase -->
             </div>
 
             <div class="flex flex-col-reverse md:flex-row gap-4">
@@ -164,7 +177,8 @@
         <div id="tela-relatorio-caixa" class="hidden container">
             <div class="card space-y-4">
                 <h1 class="text-2xl font-bold text-center text-blue-900">Relatório do Caixa</h1>
-                <p class="text-sm text-center text-gray-600">Resumo das vendas em <span id="relatorio-local"></span> em <span id="relatorio-data"></span>.</p>
+                <p class="text-sm text-center text-gray-600">Resumo das vendas em <span id="relatorio-local"></span>.</p>
+                <p class="text-sm text-center text-gray-600">Relatório gerado por <span id="relatorio-vendedor" class="font-semibold"></span> em <span id="relatorio-data" class="font-semibold"></span>.</p>
                 
                 <div id="relatorio-conteudo">
                     <h2 class="text-xl font-bold mt-4">Itens Vendidos</h2>
@@ -224,6 +238,10 @@
                         <label for="produto-quantidade" class="block text-sm font-medium text-gray-700">Estoque:</label>
                         <input type="number" id="produto-quantidade" step="1" min="0" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2" placeholder="Ex: 10">
                     </div>
+                    <div>
+                        <label for="produto-imagem" class="block text-sm font-medium text-gray-700">URL da Imagem:</label>
+                        <input type="text" id="produto-imagem" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2" placeholder="Ex: https://link.para/imagem.jpg">
+                    </div>
                     <div class="flex items-center space-x-2">
                         <input type="checkbox" id="produto-disponivel" class="rounded text-blue-500 focus:ring-blue-500">
                         <label for="produto-disponivel" class="text-sm text-gray-700">Disponível para Venda</label>
@@ -262,6 +280,20 @@
             </div>
         </div>
     </div>
+    
+    <!-- Modal de Confirmação (novo) -->
+    <div id="confirmation-modal" class="hidden fixed inset-0 flex items-center justify-center z-50 p-4">
+        <div class="modal absolute inset-0"></div>
+        <div class="card relative z-10 w-full max-w-sm text-center">
+            <h2 class="text-xl font-bold mb-4">Confirmar Exclusão</h2>
+            <p class="text-gray-700 mb-6">Tem certeza que deseja excluir o produto <span id="produto-nome-exclusao" class="font-semibold text-red-600"></span>?</p>
+            <div class="flex justify-between gap-4">
+                <button id="confirm-delete-btn" class="w-1/2 bg-red-500 text-white py-2 px-4 rounded-md hover:bg-red-600 transition-colors">Excluir</button>
+                <button id="cancel-delete-btn" class="w-1/2 bg-gray-300 text-gray-800 py-2 px-4 rounded-md hover:bg-gray-400 transition-colors">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
 
     <!-- Scripts -->
     <script>
@@ -279,6 +311,8 @@
             dataVenda: '',
             localVenda: '',
         };
+        
+        let produtoParaExcluir = null;
         
         // --- Funções de Utilitário ---
         function showMessage(text, isError = false) {
@@ -302,22 +336,27 @@
             const storedProducts = localStorage.getItem('produtos');
             if (storedProducts) {
                 try {
-                    produtos = JSON.parse(storedProducts);
+                    const parsedProducts = JSON.parse(storedProducts);
+                    // Garante que a quantidade é um número
+                    produtos = parsedProducts.map(p => ({
+                        ...p,
+                        quantidade: Number(p.quantidade)
+                    }));
                 } catch (e) {
                     console.error("Erro ao carregar produtos do localStorage:", e);
                     // Se falhar, usa a lista padrão
                     produtos = [
-                        { id: 'prod1', nome: 'Brigadeiro', preco: 4.50, disponivel: true, quantidade: 10 },
-                        { id: 'prod2', nome: 'Beijinho', preco: 4.00, disponivel: true, quantidade: 10 },
-                        { id: 'prod3', nome: 'Cajuzinho', preco: 4.25, disponivel: false, quantidade: 0 }
+                        { id: 'prod1', nome: 'Brigadeiro', preco: 4.50, disponivel: true, quantidade: 10, imagemUrl: '' },
+                        { id: 'prod2', nome: 'Beijinho', preco: 4.00, disponivel: true, quantidade: 10, imagemUrl: '' },
+                        { id: 'prod3', nome: 'Cajuzinho', preco: 4.25, disponivel: false, quantidade: 0, imagemUrl: '' }
                     ];
                 }
             } else {
                 // Se não houver dados, usa a lista padrão inicial
                 produtos = [
-                    { id: 'prod1', nome: 'Brigadeiro', preco: 4.50, disponivel: true, quantidade: 10 },
-                    { id: 'prod2', nome: 'Beijinho', preco: 4.00, disponivel: true, quantidade: 10 },
-                    { id: 'prod3', nome: 'Cajuzinho', preco: 4.25, disponivel: false, quantidade: 0 }
+                    { id: 'prod1', nome: 'Brigadeiro', preco: 4.50, disponivel: true, quantidade: 10, imagemUrl: '' },
+                    { id: 'prod2', nome: 'Beijinho', preco: 4.00, disponivel: true, quantidade: 10, imagemUrl: '' },
+                    { id: 'prod3', nome: 'Cajuzinho', preco: 4.25, disponivel: false, quantidade: 0, imagemUrl: '' }
                 ];
             }
 
@@ -333,6 +372,10 @@
             } else {
                 vendasDia = [];
             }
+            
+            // Define a data atual no campo de data por padrão
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('data').value = today;
 
             renderizarProdutos();
         }
@@ -358,13 +401,17 @@
                  container.innerHTML = `<p class="text-center text-gray-500 italic col-span-2 sm:col-span-3">Nenhum produto disponível.</p>`;
             }
             
-            produtosDisponiveis.forEach(produto => {
+            produtosDisponiveis.forEach((produto, index) => {
                 const isOutOfStock = produto.quantidade <= 0;
                 const cardClasses = isOutOfStock ? 'out-of-stock cursor-not-allowed' : 'cursor-pointer';
 
+                const produtoIcon = produto.imagemUrl ? 
+                                   `<img src="${produto.imagemUrl}" alt="${produto.nome}" class="w-16 h-16 object-cover rounded-full mb-2 border-2 border-gray-200">` : 
+                                   `<div class="number-emoji">${index + 1}</div>`;
+
                 const html = `
                     <div data-id="${produto.id}" class="produto-card card p-2 text-center flex flex-col items-center justify-between transition-transform transform hover:scale-105 ${cardClasses}">
-                        <span class="text-3xl mb-2">🧁</span>
+                        ${produtoIcon}
                         <h3 class="font-bold text-gray-800">${produto.nome}</h3>
                         <p class="text-sm text-blue-600 font-semibold mb-1">R$ ${parseFloat(produto.preco).toFixed(2)}</p>
                         <p class="text-xs text-gray-500">${isOutOfStock ? 'Esgotado' : `Em estoque: ${produto.quantidade}`}</p>
@@ -382,12 +429,12 @@
                  listaGerenciamento.innerHTML = `<p class="text-center text-gray-500 italic">Nenhum produto cadastrado.</p>`;
             }
             
-            produtos.forEach(produto => {
+            produtos.forEach((produto, index) => {
                 const li = document.createElement('li');
                 li.className = "flex justify-between items-center bg-gray-50 p-3 rounded-lg shadow-sm";
                 li.innerHTML = `
                     <div class="flex-1">
-                        <p class="font-semibold text-gray-800">${produto.nome}</p>
+                        <p class="font-semibold text-gray-800">(${index + 1}) ${produto.nome}</p>
                         <p class="text-sm text-gray-600">R$ ${parseFloat(produto.preco).toFixed(2)}</p>
                         <p class="text-xs text-gray-600">Estoque: ${produto.quantidade}</p>
                         <span class="text-xs ${produto.disponivel ? 'text-green-600' : 'text-red-600'}">
@@ -419,10 +466,10 @@
                     li.innerHTML = `
                         <span>${item.nome} (x${item.quantidade})</span>
                         <div class="flex items-center space-x-2">
-                             <button data-id="${item.id}" class="remover-item-btn text-red-500 hover:text-red-700 p-1 rounded-full text-xs">
+                             <span>R$ ${(parseFloat(item.preco) * item.quantidade).toFixed(2)}</span>
+                             <button data-id="${item.id}" class="remover-btn text-red-500 hover:bg-red-500 hover:text-white border border-red-500 p-1 px-2 rounded-md transition-colors text-sm">
                                -
                             </button>
-                            <span>R$ ${(parseFloat(item.preco) * item.quantidade).toFixed(2)}</span>
                         </div>
                     `;
                     listaPedido.appendChild(li);
@@ -451,13 +498,22 @@
             const produto = produtos.find(p => p.id === id);
             if (!produto) return;
 
-            // Verifica se há estoque
+            // Encontra o item no pedido atual, se existir
+            const itemExistente = pedidoAtual.itens.find(item => item.id === id);
+            const quantidadeNoCarrinho = itemExistente ? itemExistente.quantidade : 0;
+
+            // Nova verificação: Impede adicionar se o estoque for atingido
+            if (quantidadeNoCarrinho >= produto.quantidade) {
+                 showMessage(`Desculpe, você já adicionou a quantidade máxima de "${produto.nome}" disponível em estoque.`, true);
+                 return;
+            }
+
+            // Verifica se o produto está disponível no geral
             if (produto.quantidade <= 0) {
                 showMessage(`Desculpe, o produto "${produto.nome}" está esgotado.`, true);
                 return;
             }
 
-            const itemExistente = pedidoAtual.itens.find(item => item.id === id);
             if (itemExistente) {
                 itemExistente.quantidade++;
             } else {
@@ -465,21 +521,13 @@
             }
 
             pedidoAtual.total += parseFloat(produto.preco);
-            produto.quantidade--; // Decrementa o estoque
             saveData();
             renderizarPedido();
-            renderizarProdutos(); // Atualiza a exibição de estoque na tela de produtos
         }
         
         function removerItem(id) {
             const itemExistente = pedidoAtual.itens.find(item => item.id === id);
             if (!itemExistente) return;
-            
-            // Reverte o estoque
-            const produtoOriginal = produtos.find(p => p.id === id);
-            if (produtoOriginal) {
-                produtoOriginal.quantidade++;
-            }
             
             itemExistente.quantidade--;
             pedidoAtual.total -= parseFloat(itemExistente.preco);
@@ -490,7 +538,6 @@
             
             saveData();
             renderizarPedido();
-            renderizarProdutos(); // Atualiza a exibição de estoque
         }
 
         function registrarVenda(metodoPagamento) {
@@ -578,32 +625,28 @@
             document.getElementById('total-arrecadado').textContent = `R$ ${totalArrecadado.toFixed(2)}`;
             document.getElementById('relatorio-local').textContent = dadosCaixa.localVenda;
             document.getElementById('relatorio-data').textContent = dadosCaixa.dataVenda;
+            document.getElementById('relatorio-vendedor').textContent = dadosCaixa.nomeVendedor;
         }
 
         function exportarPDF() {
             const element = document.getElementById('relatorio-conteudo');
             const { jsPDF } = window.jspdf;
 
+            // Adiciona informações do caixa ao PDF
+            const doc = new jsPDF();
+            doc.text(`Relatório de Vendas`, 10, 10);
+            doc.text(`Vendedor: ${dadosCaixa.nomeVendedor}`, 10, 20);
+            doc.text(`Local: ${dadosCaixa.localVenda}`, 10, 30);
+            doc.text(`Data: ${dadosCaixa.dataVenda}`, 10, 40);
+            
             html2canvas(element, { scale: 2 }).then(canvas => {
                 const imgData = canvas.toDataURL('image/png');
-                const pdf = new jsPDF('p', 'mm', 'a4');
-                const imgWidth = 210;
+                const imgWidth = 190;
                 const pageHeight = 297;
                 const imgHeight = canvas.height * imgWidth / canvas.width;
-                let heightLeft = imgHeight;
-
-                let position = 0;
-
-                pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-                heightLeft -= pageHeight;
-
-                while (heightLeft >= 0) {
-                    position = heightLeft - imgHeight;
-                    pdf.addPage();
-                    pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-                    heightLeft -= pageHeight;
-                }
-                pdf.save(`Relatorio_Caixa_${dadosCaixa.localVenda}_${dadosCaixa.dataVenda}.pdf`);
+                
+                doc.addImage(imgData, 'PNG', 10, 50, imgWidth, imgHeight);
+                doc.save(`Relatorio_Caixa_${dadosCaixa.localVenda}_${dadosCaixa.dataVenda}.pdf`);
             });
         }
         
@@ -612,8 +655,13 @@
             const vendas = vendasDia;
             let csvContent = "data:text/csv;charset=utf-8,";
             
-            // Cabeçalho da planilha
-            csvContent += "Venda;Data;Local;Vendedor;Valor Total;Forma de Pagamento";
+            // Adiciona as informações do caixa como um cabeçalho
+            csvContent += `Vendedor:;${dadosCaixa.nomeVendedor}\n`;
+            csvContent += `Local:;${dadosCaixa.localVenda}\n`;
+            csvContent += `Data:;${dadosCaixa.dataVenda}\n\n`;
+
+            // Cabeçalho da planilha de vendas
+            csvContent += "Venda;Valor Total;Forma de Pagamento";
 
             // Encontra todos os nomes de itens únicos para criar as colunas dinâmicas
             const todosItens = new Set();
@@ -632,9 +680,6 @@
                 // Mapeia os dados da venda para a linha CSV
                 const row = [
                     `"Venda ${index + 1}"`,
-                    `"${venda.dataVenda}"`,
-                    `"${venda.localVenda}"`,
-                    `"${venda.nomeVendedor}"`,
                     `"R$ ${venda.valorTotal.toFixed(2).replace('.', ',')}"`,
                     `"${venda.formaPagamento}"`,
                 ];
@@ -691,6 +736,11 @@
             
             let csvContent = "data:text/csv;charset=utf-8,";
             
+            // Adiciona as informações do caixa como um cabeçalho
+            csvContent += `Vendedor:;${dadosCaixa.nomeVendedor}\n`;
+            csvContent += `Local:;${dadosCaixa.localVenda}\n`;
+            csvContent += `Data:;${dadosCaixa.dataVenda}\n\n`;
+
             // Cabeçalho da planilha
             csvContent += "Item;Quantidade Total;Valor Total\n";
 
@@ -724,8 +774,13 @@
         // Abertura de Caixa
         document.getElementById('abrir-caixa-btn').addEventListener('click', () => {
             const nome = document.getElementById('nome').value;
-            const data = document.getElementById('data').value;
+            let data = document.getElementById('data').value;
             const local = document.getElementById('local').value;
+
+            if (!data) {
+                const today = new Date();
+                data = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+            }
 
             if (nome && data && local) {
                 dadosCaixa.nomeVendedor = nome;
@@ -757,7 +812,7 @@
         
         // Remover item do pedido
         document.getElementById('lista-pedido').addEventListener('click', (e) => {
-            if (e.target.classList.contains('remover-item-btn')) {
+            if (e.target.classList.contains('remover-btn')) {
                 const id = e.target.dataset.id;
                 removerItem(id);
             }
@@ -790,7 +845,7 @@
                 pedidoAtual.itens.forEach(itemPedido => {
                      const produtoOriginal = produtos.find(p => p.id === itemPedido.id);
                      if (produtoOriginal) {
-                         produtoOriginal.quantidade = produtoOriginal.quantidade - itemPedido.quantidade;
+                         produtoOriginal.quantidade -= itemPedido.quantidade;
                      }
                 });
                 
@@ -798,6 +853,7 @@
                 saveData();
                 
                 registrarVenda(metodoPagamento);
+                renderizarProdutos(); // Atualiza a exibição do estoque na tela de produtos
             } else {
                 showMessage("Selecione uma forma de pagamento.", true);
             }
@@ -821,8 +877,10 @@
 
         // Fechar caixa definitivo (do relatório)
         document.getElementById('fechar-caixa-btn').addEventListener('click', () => {
-            // Primeiro, exporta os dados de vendas
+            // Primeiro, exporta os dois relatórios conforme a solicitação
             exportarRelatorioGeralExcel();
+            exportarExcel();
+
             // Em seguida, apaga as vendas e os dados do caixa
             vendasDia = [];
             localStorage.removeItem('vendasDia');
@@ -850,6 +908,7 @@
             const nome = document.getElementById('produto-nome').value;
             const preco = parseFloat(document.getElementById('produto-preco').value);
             const quantidade = parseInt(document.getElementById('produto-quantidade').value);
+            const imagemUrl = document.getElementById('produto-imagem').value;
             const disponivel = document.getElementById('produto-disponivel').checked;
 
             if (!nome || isNaN(preco) || isNaN(quantidade)) {
@@ -861,12 +920,12 @@
                 // Editar produto existente
                 const index = produtos.findIndex(p => p.id === id);
                 if (index !== -1) {
-                    produtos[index] = { ...produtos[index], nome, preco, quantidade, disponivel };
+                    produtos[index] = { ...produtos[index], nome, preco, quantidade, disponivel, imagemUrl };
                 }
             } else {
                 // Adicionar novo produto
                 const novoId = 'prod' + (produtos.length + 1);
-                produtos.push({ id: novoId, nome, preco, quantidade, disponivel });
+                produtos.push({ id: novoId, nome, preco, quantidade, disponivel, imagemUrl });
             }
 
             saveData(); // Salva os produtos no localStorage
@@ -878,12 +937,13 @@
             document.getElementById('produto-nome').value = '';
             document.getElementById('produto-preco').value = '';
             document.getElementById('produto-quantidade').value = '';
+            document.getElementById('produto-imagem').value = '';
             document.getElementById('produto-disponivel').checked = false;
 
             showMessage("Produto salvo com sucesso!");
         });
 
-        // Edição e Exclusão de produto
+        // Edição e Exclusão de produto (Lógica alterada para usar o modal de confirmação)
         document.getElementById('lista-produtos-gerenciamento').addEventListener('click', (e) => {
             const id = e.target.dataset.id;
             if (e.target.classList.contains('editar-btn')) {
@@ -893,24 +953,45 @@
                     document.getElementById('produto-nome').value = produto.nome;
                     document.getElementById('produto-preco').value = produto.preco;
                     document.getElementById('produto-quantidade').value = produto.quantidade;
+                    document.getElementById('produto-imagem').value = produto.imagemUrl || '';
                     document.getElementById('produto-disponivel').checked = produto.disponivel;
                 }
             } else if (e.target.classList.contains('excluir-btn')) {
-                // Exclui o produto sem confirmação via alerta para seguir a nova regra
-                produtos = produtos.filter(p => p.id !== id);
-                saveData(); // Salva as mudanças
-                renderizarGerenciamento();
-                renderizarProdutos(); // Atualiza a tela principal
-                showMessage("Produto excluído com sucesso!");
+                const produto = produtos.find(p => p.id === id);
+                if (produto) {
+                    produtoParaExcluir = id;
+                    document.getElementById('produto-nome-exclusao').textContent = produto.nome;
+                    document.getElementById('confirmation-modal').classList.remove('hidden');
+                }
             }
         });
         
+        // Confirmação de exclusão
+        document.getElementById('confirm-delete-btn').addEventListener('click', () => {
+            if (produtoParaExcluir) {
+                produtos = produtos.filter(p => p.id !== produtoParaExcluir);
+                saveData();
+                renderizarGerenciamento();
+                renderizarProdutos();
+                showMessage("Produto excluído com sucesso!");
+                produtoParaExcluir = null;
+                document.getElementById('confirmation-modal').classList.add('hidden');
+            }
+        });
+        
+        // Cancelar exclusão
+        document.getElementById('cancel-delete-btn').addEventListener('click', () => {
+            produtoParaExcluir = null;
+            document.getElementById('confirmation-modal').classList.add('hidden');
+        });
+
         // Limpar campos de edição ao cancelar
         document.getElementById('cancelar-edicao-btn').addEventListener('click', () => {
             document.getElementById('produto-id-edicao').value = '';
             document.getElementById('produto-nome').value = '';
             document.getElementById('produto-preco').value = '';
             document.getElementById('produto-quantidade').value = '';
+            document.getElementById('produto-imagem').value = '';
             document.getElementById('produto-disponivel').checked = false;
         });
 
